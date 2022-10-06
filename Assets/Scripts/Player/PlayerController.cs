@@ -30,6 +30,8 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
     [SerializeField] public TMPro.TextMeshProUGUI scoreText;
     [SerializeField] public TMPro.TextMeshProUGUI restartText;
     [SerializeField] public TMPro.TextMeshProUGUI helpText;
+    [SerializeField] public GameObject uiFadePanel;
+    [SerializeField] public TextMeshProUGUI pauseText;
     [SerializeField] public Material mat;
 
     [Header("Tweakable Parameters")]
@@ -63,11 +65,14 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
     [SerializeField] private float inputSpeed = 0f;
     [SerializeField] public float jumpRequest = -5f;
     [SerializeField] public float boostRequest = -5f;
-    [SerializeField] public float previousBoost = -10f;
+    [SerializeField] public float previousBoostRequest = -10f;
     [SerializeField] private bool facingRight = true;
     [SerializeField] private bool isGrounded = true;
-    [SerializeField] private int jumpsLeft = 2;
+    [SerializeField] private int jumpsLeft = 4;
     [SerializeField] private float lastTimeCrossedCombo = 0f;
+
+    [SerializeField] private Vector3 savedVelocity;
+    [SerializeField] private float savedAngularVelocity;
 
     [SerializeField] private float originalOrthoSize = 0f;
 
@@ -99,6 +104,27 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
         health = maxHealth;
     }
 
+    private void Start()
+    {
+        GameManager.Instance.OnPause += (gm, p) =>
+        {
+            if (p)
+            {
+                savedVelocity = rigidbody.velocity;
+                savedAngularVelocity = rigidbody.angularVelocity;
+                rigidbody.velocity = Vector3.zero;
+                rigidbody.angularVelocity = 0f;
+                rigidbody.isKinematic = true;
+            } else
+            {
+                rigidbody.isKinematic = false;
+                rigidbody.velocity = savedVelocity;
+                rigidbody.angularVelocity = savedAngularVelocity;
+            }
+        };
+        PauseGame(true);
+    }
+
     private void OnEnable()
     {
         controls.Enable();
@@ -112,12 +138,20 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
     // Update is called once per frame
     void FixedUpdate()
     {
+        if (GameManager.Instance.Paused)
+        {
+            jumpRequest += Time.fixedDeltaTime;
+            boostRequest += Time.fixedDeltaTime;
+            previousBoostRequest += Time.fixedDeltaTime;
+            return;
+        }
         if (health <= 0)
         {
-            rigidbody.velocity = Vector3.zero;
-            rigidbody.gravityScale = 0;
             healthMeter.value = 0;
             restartText.text = "Press Escape to Restart";
+            pauseText.text = "You've ran your last run";
+            pauseText.color = Color.red;
+            PauseGame(true);
             return;
         } else
         {
@@ -210,7 +244,8 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
             Debug.Log("Ortho size is 0, skipping camera scale");
             return;
         }
-        float newSize = Mathf.Log(Mathf.Abs(rigidbody.velocity.x), orthoSizeSpeedBase) * originalOrthoSize * orthoSizeSpeedScale;
+        float speedMultiplier = Mathf.Log(Mathf.Abs(rigidbody.velocity.x), orthoSizeSpeedBase) * orthoSizeSpeedScale;
+        float newSize = speedMultiplier * originalOrthoSize;
         newSize = Mathf.Lerp(cam.m_Lens.OrthographicSize, newSize, 0.3f);
         if (newSize < originalOrthoSize)
             newSize = originalOrthoSize;
@@ -219,6 +254,16 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
         if (!float.IsNaN(newSize))
         {
             cam.m_Lens.OrthographicSize = newSize;
+        }
+        AnimatorStateInfo currentState = animator.GetCurrentAnimatorStateInfo(0);
+        if (currentState.IsName("Player_Run"))
+        {
+            if (speedMultiplier < 1)
+                speedMultiplier = 1;
+            animator.speed = speedMultiplier;
+        } else
+        {
+            animator.speed = 1f;
         }
     }
 
@@ -298,9 +343,9 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 
     void CheckBoost()
     {
-        if (Time.fixedTime - previousBoost >= boostCooldownTimer && Time.fixedTime - boostRequest < boostRequestBuffer)
+        if (Time.fixedTime - previousBoostRequest >= boostCooldownTimer && Time.fixedTime - boostRequest < boostRequestBuffer)
         {
-            previousBoost = Time.fixedTime;
+            previousBoostRequest = Time.fixedTime;
 
             Vector3 velocity = rigidbody.velocity;
             float angleDiff = Mathf.Atan2(velocity.y, velocity.x);
@@ -310,7 +355,7 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
         }
         if (boostMeter != null)
         {
-            boostMeter.value = (Time.fixedTime - previousBoost) / boostCooldownTimer;
+            boostMeter.value = (Time.fixedTime - previousBoostRequest) / boostCooldownTimer;
         }
     }
 
@@ -399,12 +444,32 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 
     public void OnEscape(InputAction.CallbackContext context)
     {
-        if (health <= 0)
+        if (context.started)
         {
-            SceneManager.LoadScene(0);
-        } else
-        {
-            helpText.gameObject.SetActive(helpText.gameObject.activeInHierarchy);
+            if (health <= 0)
+            {
+                SceneManager.LoadScene(0);
+            }
+            else
+            {
+                TogglePauseGame();
+            }
         }
+    }
+
+    public void TogglePauseGame()
+    {
+        GameManager.Instance.Paused = !GameManager.Instance.Paused;
+        helpText.gameObject.SetActive(!helpText.gameObject.activeInHierarchy);
+        uiFadePanel.gameObject.SetActive(!uiFadePanel.gameObject.activeInHierarchy);
+        pauseText.gameObject.SetActive(!pauseText.gameObject.activeInHierarchy);
+    }
+
+    public void PauseGame(bool paused)
+    {
+        GameManager.Instance.Paused = paused;
+        helpText.gameObject.SetActive(!helpText.gameObject.activeInHierarchy);
+        uiFadePanel.gameObject.SetActive(!uiFadePanel.gameObject.activeInHierarchy);
+        pauseText.gameObject.SetActive(!pauseText.gameObject.activeInHierarchy);
     }
 }

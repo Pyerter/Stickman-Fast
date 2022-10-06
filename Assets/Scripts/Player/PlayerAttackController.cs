@@ -27,6 +27,11 @@ public class PlayerAttackController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (GameManager.Instance.Paused)
+        {
+            lastAttack += Time.fixedDeltaTime;
+            return;
+        }
         if (Time.fixedTime - lastAttack > attackDuration)
         {
             gameObject.SetActive(false);
