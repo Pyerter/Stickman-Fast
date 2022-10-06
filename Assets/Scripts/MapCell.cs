@@ -107,7 +107,7 @@ public class MapCell : MonoBehaviour
     public PlayerController playerController = null;
 
     [SerializeField] public bool willDegenerate = false;
-    [SerializeField] public float degenerationGrace = 1f;
+    [SerializeField] public float degenerationGrace = 0.05f;
     [SerializeField] public float degenerationRequest = 0f;
 
     /** Get the index of the passed direction. */
@@ -180,7 +180,7 @@ public class MapCell : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (willDegenerate && Time.fixedTime - degenerationRequest > degenerationGrace)
+        if (willDegenerate)// && Time.fixedTime - degenerationRequest > degenerationGrace)
         {
             DegenerateNeighbors();
             willDegenerate = false;

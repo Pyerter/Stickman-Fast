@@ -1302,7 +1302,7 @@ MonoBehaviour:
   cellMaster: {fileID: 0}
   playerController: {fileID: 0}
   willDegenerate: 0
-  degenerationGrace: 1
+  degenerationGrace: 0.05
   degenerationRequest: 0
 --- !u!1 &1095491055372547389
 GameObject:

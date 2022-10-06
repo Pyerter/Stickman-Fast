@@ -1006,6 +1006,9 @@ MonoBehaviour:
   - {fileID: 0}
   cellMaster: {fileID: 0}
   playerController: {fileID: 0}
+  willDegenerate: 0
+  degenerationGrace: 0.05
+  degenerationRequest: 0
 --- !u!1 &2391521322189631822
 GameObject:
   m_ObjectHideFlags: 0

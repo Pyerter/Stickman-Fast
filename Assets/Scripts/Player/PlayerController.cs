@@ -188,6 +188,7 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
         float weightedDirection = isGrounded ? hDirection : hDirection * aerialControl;
         Vector3 velocity = rigidbody.velocity;
         int velocitySign = Utility.Sign(velocity.x);
+        bool breaking = isGrounded && hDirection == -velocitySign;
         if (hDirection != velocitySign)
             weightedDirection *= isGrounded ? breakMultiplier : breakMultiplier * aerialControl * aerialControl;
         else if (Mathf.Abs(rigidbody.velocity.x) < snapSpeedThreshold)
@@ -205,6 +206,7 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
         }
         rigidbody.velocity = velocity;
         animator.SetFloat("SpeedX", Mathf.Abs(velocity.x));
+        animator.SetBool("Breaking", breaking);
     }
 
     void UpdateVerticalDirection()
@@ -256,10 +258,12 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
             cam.m_Lens.OrthographicSize = newSize;
         }
         AnimatorStateInfo currentState = animator.GetCurrentAnimatorStateInfo(0);
-        if (currentState.IsName("Player_Run"))
+        if (currentState.IsName("Player_Run") || currentState.IsName("Player_Super_Run"))
         {
-            if (speedMultiplier < 1)
-                speedMultiplier = 1;
+            if (speedMultiplier < 0.5f)
+                speedMultiplier = 0.5f;
+            else if (speedMultiplier > 1f)
+                speedMultiplier *= speedMultiplier;
             animator.speed = speedMultiplier;
         } else
         {
