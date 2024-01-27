@@ -14,9 +14,9 @@ public class Enemy : MonoBehaviour
         PlayerController player;
         if (collision.TryGetComponent<PlayerController>(out player))
         {
-            Vector3 velocity = player.rigidbody.velocity;
+            Vector3 velocity = player.RB.velocity;
             velocity *= slowBounce;
-            player.rigidbody.velocity = velocity;
+            player.RB.velocity = velocity;
             player.currentCombo -= player.comboPerSecond * 2;
             player.health -= damage;
             Destroy(gameObject);

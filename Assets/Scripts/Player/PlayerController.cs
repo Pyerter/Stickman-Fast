@@ -7,51 +7,38 @@ using UnityEngine.SceneManagement;
 using Cinemachine;
 using TMPro;
 
+[RequireComponent(typeof(PlayerMotionController))]
 public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 {
     PlayerControls controls;
 
     [Header("References")]
-    [SerializeField] public Animator animator;
-    [SerializeField] public Rigidbody2D rigidbody;
-    [SerializeField] public PlayerAttackController attackController;
-    [SerializeField] public CinemachineVirtualCamera cam;
-    [SerializeField] public Transform groundChecker;
-    [SerializeField] private LayerMask groundMask;
-    [SerializeField] public Slider boostMeter;
-    [SerializeField] public Slider healthMeter;
-    [SerializeField] public Image jumpImage;
-    [SerializeField] public Image jompImage;
-    [SerializeField] public Image jampImage;
-    [SerializeField] public Image jumpXImage;
-    [SerializeField] public Image jompXImage;
-    [SerializeField] public Image jampXImage;
-    [SerializeField] public TMPro.TextMeshProUGUI comboText;
-    [SerializeField] public TMPro.TextMeshProUGUI scoreText;
-    [SerializeField] public TMPro.TextMeshProUGUI restartText;
-    [SerializeField] public TMPro.TextMeshProUGUI helpText;
-    [SerializeField] public GameObject uiFadePanel;
-    [SerializeField] public TextMeshProUGUI pauseText;
-    [SerializeField] public Material mat;
+    [SerializeField] protected Animator animator;
+    [SerializeField] protected Rigidbody2D _rb;
+    public Rigidbody2D RB { get { if (_rb == null) _rb = GetComponent<Rigidbody2D>(); return _rb; } }
+    [SerializeField] protected PlayerMotionController _motionController;
+    public PlayerMotionController MotionController { get { if (_motionController == null) _motionController = GetComponent<PlayerMotionController>(); return _motionController; } }
+    [SerializeField] protected PlayerAttackController attackController;
+    [SerializeField] protected Slider boostMeter;
+    [SerializeField] protected Slider healthMeter;
+    [SerializeField] protected Image jumpImage;
+    [SerializeField] protected Image jompImage;
+    [SerializeField] protected Image jampImage;
+    [SerializeField] protected Image jumpXImage;
+    [SerializeField] protected Image jompXImage;
+    [SerializeField] protected Image jampXImage;
+    [SerializeField] protected TMPro.TextMeshProUGUI comboText;
+    [SerializeField] protected TMPro.TextMeshProUGUI scoreText;
+    [SerializeField] protected TMPro.TextMeshProUGUI restartText;
+    [SerializeField] protected TMPro.TextMeshProUGUI helpText;
+    [SerializeField] protected GameObject uiFadePanel;
+    [SerializeField] protected TextMeshProUGUI pauseText;
+    [SerializeField] protected Material mat;
+    [SerializeField] protected CameraSpeedZoomer cameraController;
 
     [Header("Tweakable Parameters")]
-    [SerializeField] public float maxCamOrthoSize = 40f;
-    [SerializeField] private float orthoSizeSpeedBase = 20f;
-    [SerializeField] private float orthoSizeSpeedScale = 3f;
-    [SerializeField] private float groundCheckRadius = 0.1f;
-    [SerializeField] public float horizontalAcceleration = 2f;
-    [SerializeField] public float snapSpeedThreshold = 10f;
-    [SerializeField] public float snapMultiplier = 40f;
-    [SerializeField] public float breakMultiplier = 20f;
-    [SerializeField] public float flatDragAccelerationPercent = 0.5f;
-    [SerializeField] public float aerialControl = 0.5f;
-    [SerializeField] public float jumpSpeed = 2f;
     [SerializeField] public float jumpRequestBuffer = 0.5f;
-    [SerializeField] public float boostSpeed = 20f;
     [SerializeField] public float boostRequestBuffer = 0.2f;
-    [SerializeField] public float boostCooldownTimer = 5f;
-    [SerializeField] public Vector2 playerGravity = new Vector2(0f, 1f);
-    [SerializeField] public int maxJumps = 4;
 
     [Header("Points")]
     [SerializeField] public float comboSpeedThreshold = 50f;
@@ -62,19 +49,10 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
     [SerializeField] public int health = 20;
 
     [Header("Trackable Variables")]
-    [SerializeField] private float inputSpeed = 0f;
     [SerializeField] public float jumpRequest = -5f;
     [SerializeField] public float boostRequest = -5f;
-    [SerializeField] public float previousBoostRequest = -10f;
     [SerializeField] private bool facingRight = true;
-    [SerializeField] private bool isGrounded = true;
-    [SerializeField] private int jumpsLeft = 4;
     [SerializeField] private float lastTimeCrossedCombo = 0f;
-
-    [SerializeField] private Vector3 savedVelocity;
-    [SerializeField] private float savedAngularVelocity;
-
-    [SerializeField] private float originalOrthoSize = 0f;
 
     void Awake()
     {
@@ -85,44 +63,33 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
         {
             animator = GetComponentInChildren<Animator>();
         }
-        if (rigidbody == null)
+        if (_rb == null)
         {
-            rigidbody = GetComponent<Rigidbody2D>();
+            _rb = GetComponent<Rigidbody2D>();
         }
-        if (cam != null)
+        if (cameraController == null)
         {
-            originalOrthoSize = cam.m_Lens.OrthographicSize;
-        } else
-        {
-            Debug.Log("No camera - can't change camera size");
+            cameraController = FindObjectOfType<CameraSpeedZoomer>();
         }
         if (attackController == null)
         {
             attackController = GetComponentInChildren<PlayerAttackController>();
         }
 
+        MotionController.Init(this);
+
         health = maxHealth;
     }
 
     private void Start()
     {
-        GameManager.Instance.OnPause += (gm, p) =>
-        {
-            if (p)
-            {
-                savedVelocity = rigidbody.velocity;
-                savedAngularVelocity = rigidbody.angularVelocity;
-                rigidbody.velocity = Vector3.zero;
-                rigidbody.angularVelocity = 0f;
-                rigidbody.isKinematic = true;
-            } else
-            {
-                rigidbody.isKinematic = false;
-                rigidbody.velocity = savedVelocity;
-                rigidbody.angularVelocity = savedAngularVelocity;
-            }
-        };
+        GameManager.Instance.OnPause += OnPause;
         PauseGame(true);
+    }
+
+    protected void OnPause(GameManager gm, bool paused)
+    {
+        MotionController.OnPause(gm, paused);
     }
 
     // Update is called once per frame
@@ -132,7 +99,7 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
         {
             jumpRequest += Time.fixedDeltaTime;
             boostRequest += Time.fixedDeltaTime;
-            previousBoostRequest += Time.fixedDeltaTime;
+            MotionController.UpdateAsPaused();
             return;
         }
         if (health <= 0)
@@ -147,69 +114,20 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
         {
             restartText.text = "";
         }
-        AssertGrounded();
-        UpdateVerticalDirection();
-        UpdateHorizontalDirection();
-        UpdateShaderDirection();
-        UpdateCameraSize();
-        UpdateCombo();
+
         CheckJump();
         CheckBoost();
         CheckFlip();
-    }
-
-    void AssertGrounded()
-    {
-        bool nowGrounded = Physics2D.OverlapCircle(groundChecker.position, groundCheckRadius, (int)groundMask);
-        if (nowGrounded && !isGrounded)
-        {
-            jumpsLeft = maxJumps;
-        } else if (!nowGrounded && jumpsLeft == maxJumps)
-        {
-            jumpsLeft--;
-        }
-        isGrounded = nowGrounded;
-        animator.SetBool("Air", !isGrounded);
-    }
-
-    void UpdateHorizontalDirection()
-    {
-        int hDirection = Utility.Sign(inputSpeed);
-        float weightedDirection = isGrounded ? hDirection : hDirection * aerialControl;
-        Vector3 velocity = rigidbody.velocity;
-        int velocitySign = Utility.Sign(velocity.x);
-        bool breaking = isGrounded && hDirection == -velocitySign;
-        if (hDirection != velocitySign)
-            weightedDirection *= isGrounded ? breakMultiplier : breakMultiplier * aerialControl * aerialControl;
-        else if (Mathf.Abs(rigidbody.velocity.x) < snapSpeedThreshold)
-        {
-            weightedDirection *= isGrounded ? snapMultiplier : snapMultiplier * aerialControl;
-        }
-        velocity.x += horizontalAcceleration * weightedDirection * Time.fixedDeltaTime;
-        if (isGrounded && hDirection == 0 && velocitySign != 0)
-        {
-            float slowBy = horizontalAcceleration * flatDragAccelerationPercent * Time.fixedDeltaTime;
-            if (Mathf.Abs(velocity.x) < slowBy)
-                velocity.x = 0;
-            else
-                velocity.x -= velocitySign * slowBy;
-        }
-        rigidbody.velocity = velocity;
-        animator.SetFloat("SpeedX", Mathf.Abs(velocity.x));
-        animator.SetBool("Breaking", breaking);
-    }
-
-    void UpdateVerticalDirection()
-    {
-        Vector3 velocity = rigidbody.velocity;
-        velocity.y -= playerGravity.y * Time.fixedDeltaTime;
-        rigidbody.velocity = velocity;
-        animator.SetFloat("SpeedY", velocity.y);
+        MotionController.UpdateMotion();
+        UpdateShaderDirection();
+        UpdateCameraSize();
+        UpdateAnimator();
+        UpdateCombo();
     }
 
     void UpdateShaderDirection()
     {
-        Vector2 direction = rigidbody.velocity;
+        Vector2 direction = RB.velocity;
         float mag = direction.magnitude;
         direction.Normalize();
         direction *= Mathf.Sqrt(2);
@@ -226,27 +144,12 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 
     void UpdateCameraSize()
     {
-        if (cam == null)
-        {
-            return;
-        }
-        if (originalOrthoSize == 0)
-        {
-            originalOrthoSize = cam.m_Lens.OrthographicSize;
-            Debug.Log("Ortho size is 0, skipping camera scale");
-            return;
-        }
-        float speedMultiplier = Mathf.Log(Mathf.Abs(rigidbody.velocity.x), orthoSizeSpeedBase) * orthoSizeSpeedScale;
-        float newSize = speedMultiplier * originalOrthoSize;
-        newSize = Mathf.Lerp(cam.m_Lens.OrthographicSize, newSize, 0.3f);
-        if (newSize < originalOrthoSize)
-            newSize = originalOrthoSize;
-        if (newSize > maxCamOrthoSize)
-            newSize = maxCamOrthoSize;
-        if (!float.IsNaN(newSize))
-        {
-            cam.m_Lens.OrthographicSize = newSize;
-        }
+        cameraController?.UpdateVelocity(RB.velocity);
+    }
+
+    public void UpdateAnimator()
+    {
+        float speedMultiplier = cameraController.SpeedMultiplier;
         AnimatorStateInfo currentState = animator.GetCurrentAnimatorStateInfo(0);
         if (currentState.IsName("Player_Run") || currentState.IsName("Player_Super_Run"))
         {
@@ -255,15 +158,21 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
             else if (speedMultiplier > 1f)
                 speedMultiplier *= speedMultiplier;
             animator.speed = speedMultiplier;
-        } else
+        }
+        else
         {
             animator.speed = 1f;
         }
+
+        animator.SetFloat("SpeedX", Mathf.Abs(RB.velocity.x));
+        animator.SetFloat("SpeedY", RB.velocity.y);
+        animator.SetBool("Breaking", MotionController.Breaking);
+        animator.SetBool("Air", !MotionController.Grounded);
     }
 
     void UpdateCombo()
     {
-        if (Mathf.Abs(rigidbody.velocity.x) > comboSpeedThreshold)
+        if (Mathf.Abs(RB.velocity.x) > comboSpeedThreshold)
         {
             if (Time.fixedTime - lastTimeCrossedCombo >= 1)
             {
@@ -290,87 +199,82 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 
     void CheckJump()
     {
-        if ((isGrounded || jumpsLeft > 0) && Time.fixedTime - jumpRequest < jumpRequestBuffer)
+        if (MotionController.CanJump() && Time.fixedTime - jumpRequest < jumpRequestBuffer)
         {
-            jumpsLeft--;
-            Vector3 velocity = rigidbody.velocity;
-            velocity.y = jumpSpeed;
-            rigidbody.velocity = velocity;
+            MotionController.Jump();
             jumpRequest = Time.fixedTime - jumpRequestBuffer;
             animator.SetTrigger("Jump");
         }
 
-        if (jumpsLeft >= 3)
+        UpdateJumpDisplay();
+    }
+
+    public void UpdateJumpDisplay()
+    {
+        switch (MotionController.JumpsLeft)
         {
-            jumpImage.enabled = true;
-            jompImage.enabled = true;
-            jampImage.enabled = true;
-            jumpXImage.enabled = false;
-            jompXImage.enabled = false;
-            jampXImage.enabled = false;
-        } else if (jumpsLeft == 2)
-        {
-            jumpImage.enabled = false;
-            jompImage.enabled = true;
-            jampImage.enabled = true;
-            jumpXImage.enabled = true;
-            jompXImage.enabled = false;
-            jampXImage.enabled = false;
-        } else if (jumpsLeft == 1)
-        {
-            jumpImage.enabled = false;
-            jompImage.enabled = false;
-            jampImage.enabled = true;
-            jumpXImage.enabled = true;
-            jompXImage.enabled = true;
-            jampXImage.enabled = false;
-        } else if (jumpsLeft == 0)
-        {
-            jumpImage.enabled = false;
-            jompImage.enabled = false;
-            jampImage.enabled = false;
-            jumpXImage.enabled = true;
-            jompXImage.enabled = true;
-            jampXImage.enabled = true;
+            case 4:
+            case 3:
+                jumpImage.enabled = true;
+                jompImage.enabled = true;
+                jampImage.enabled = true;
+                jumpXImage.enabled = false;
+                jompXImage.enabled = false;
+                jampXImage.enabled = false;
+                break;
+            case 2:
+                jumpImage.enabled = false;
+                jompImage.enabled = true;
+                jampImage.enabled = true;
+                jumpXImage.enabled = true;
+                jompXImage.enabled = false;
+                jampXImage.enabled = false;
+                break;
+            case 1:
+                jumpImage.enabled = false;
+                jompImage.enabled = false;
+                jampImage.enabled = true;
+                jumpXImage.enabled = true;
+                jompXImage.enabled = true;
+                jampXImage.enabled = false;
+                break;
+            case 0:
+                jumpImage.enabled = false;
+                jompImage.enabled = false;
+                jampImage.enabled = false;
+                jumpXImage.enabled = true;
+                jompXImage.enabled = true;
+                jampXImage.enabled = true;
+                break;
         }
     }
 
     void CheckBoost()
     {
-        if (Time.fixedTime - previousBoostRequest >= boostCooldownTimer && Time.fixedTime - boostRequest < boostRequestBuffer)
+        if (MotionController.CanBoost() && Time.fixedTime - boostRequest < boostRequestBuffer)
         {
-            previousBoostRequest = Time.fixedTime;
-
-            Vector3 velocity = rigidbody.velocity;
-            float angleDiff = Mathf.Atan2(velocity.y, velocity.x);
-            Vector3 boostVelocity = new Vector3(Mathf.Cos(angleDiff) * boostSpeed, Mathf.Sin(angleDiff) * boostSpeed, 0);
-            velocity += boostVelocity;
-            rigidbody.velocity = velocity;
+            MotionController.Boost();
         }
         if (boostMeter != null)
         {
-            boostMeter.value = (Time.fixedTime - previousBoostRequest) / boostCooldownTimer;
+            boostMeter.value = MotionController.BoostPercentReady();
         }
     }
 
     void CheckFlip()
     {
-        float hSpeed = rigidbody.velocity.x;
-        if (hSpeed < 0 && facingRight)
+        int hSpeed = Utility.Sign(RB.velocity.x);
+        if (hSpeed == 1 && !facingRight)
         {
             Flip();
-        } else if (hSpeed > 0 && !facingRight)
+        } else if (hSpeed == -1 && facingRight)
         {
             Flip();
         }
     }
 
-    void Flip(bool regenJumps = true)
+    void Flip()
     {
-        if (regenJumps && Mathf.Abs(rigidbody.velocity.x) > horizontalAcceleration)
-        {
-            jumpsLeft = maxJumps - 1;
-        }
         facingRight = !facingRight;
         Vector3 scale = transform.localScale;
         scale.x *= -1;
@@ -379,7 +283,7 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 
     public void OnDirectional(InputAction.CallbackContext context)
     {
-        inputSpeed = context.ReadValue<float>();
+        MotionController.InputSpeed = context.ReadValue<float>();
     }
 
     public void OnJump(InputAction.CallbackContext context)
@@ -392,7 +296,7 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 
     public void OnBoost(InputAction.CallbackContext context)
     {
-        if (context.performed)
+        if (context.started || context.performed)
         {
             boostRequest = Time.fixedTime;
         }
@@ -402,14 +306,11 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
     {
         if (health <= 0)
             return;
-        if (context.started && (isGrounded || jumpsLeft > 0))
+
+        if (context.started && MotionController.CanReverseMotion())
         {
-            if (!isGrounded)
-                jumpsLeft--;
-            Vector3 velocity = rigidbody.velocity;
-            velocity.x *= -1;
-            rigidbody.velocity = velocity;
-            Flip(false);
+            MotionController.ReverseMotion();
+            Flip();
         }
     }
 
@@ -427,12 +328,12 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
     {
         if (health <= 0)
             return;
-        if (context.performed)
+        if ((context.started || context.performed) && MotionController.CanPlummet())
         {
-            Vector3 velocity = rigidbody.velocity;
-            if (velocity.y > 0)
-                velocity.y = -horizontalAcceleration;
-            rigidbody.velocity = velocity;
+            MotionController.Plummet();
+        } else if (context.canceled)
+        {
+            MotionController.StopPlummet();
         }
     }
 

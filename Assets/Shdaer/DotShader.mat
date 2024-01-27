@@ -40,5 +40,5 @@ Material:
     m_Floats:
     - _Fade: 0.202
     m_Colors:
-    - _Stretch: {r: 0.25328654, g: -0.10536297, b: 0, a: 0}
+    - _Stretch: {r: -0.3432637, g: -0.03852282, b: 0, a: 0}
   m_BuildTextureStacks: []
