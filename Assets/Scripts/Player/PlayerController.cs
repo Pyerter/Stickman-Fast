@@ -78,8 +78,8 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 
     void Awake()
     {
-        controls = new PlayerControls();
-        controls.InPlay.SetCallbacks(this);
+        /*controls = new PlayerControls();
+        controls.InPlay.SetCallbacks(this);*/
 
         if (animator == null)
         {
@@ -123,16 +123,6 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
             }
         };
         PauseGame(true);
-    }
-
-    private void OnEnable()
-    {
-        controls.Enable();
-    }
-
-    private void OnDisable()
-    {
-        controls.Disable();
     }
 
     // Update is called once per frame
