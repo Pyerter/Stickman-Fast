@@ -236,6 +236,7 @@ public class PlayerMotionController : MonoBehaviour
             SplineUtility.GetNearestPoint(spline.Spline, (float3)collidePoint3, out float3 nearestPoint, out t, 100, 4);
             Debug.Log(string.Format("Nearest point on spline from {0} is {1}", collidePoint3, nearestPoint));
             t = ApproximatePercentAlongSpline(spline, length, collidePoint3, nearestPoint, t, 100, 0.2f, 0.9f, 0.02f);
+            prenormalVelocity.y = 0;
         }
         float diff = timestepXVelocity / length;
         float target_t = diff + t;
@@ -253,14 +254,17 @@ public class PlayerMotionController : MonoBehaviour
         haveSplinePointCached = true;
         // Vector2 targetPos = new Vector2(splinePos.x, splinePos.y);
         ClaimControlOverPhysics(true);
-        prenormalVelocity.y = 0;
+        //prenormalVelocity.y = 0;
         RB.velocity = TranslateVelocityToNormal(prenormalVelocity);
         Vector3 pos = RB.transform.position;
+        Vector3 diffToBottom = pos - bottom.transform.position; //bottom.transform.position - RB.transform.position;
         Vector3 diffToPos = (Vector3)splinePos - bottom.transform.position;
         pos += diffToPos;
-        pos.y += 0.01f;
+        //pos = (Vector3)splinePos + diffToPos + diffToBottom;
+        pos.y += 0.001f;
         pos.z = 0;
-        RB.transform.position = pos;
+        RB.transform.position =  pos;
+
         //Debug.Log(string.Format("Based on velocity {0}, moving from {5} by {1}% from {2} to {3}, landing at {4}", timestepXVelocity, diff, t, target_t, splinePos, pos));
     }
 
@@ -355,16 +359,28 @@ public class PlayerMotionController : MonoBehaviour
     {
         wasGrounded = Grounded;
         //bool nowGrounded = Physics2D.OverlapCircle(groundChecker.position, groundCheckRadius, (int)groundMask);
-        groundHitInfo = Physics2D.Raycast(groundChecker.position, Vector2.down, groundCheckDistance, groundMask);
-        bool nowGrounded = groundHitInfo.collider != null;
-        if (!CanMagnet)
-            SplineGround = null;
-        else if (nowGrounded)
-            SplineGround = groundHitInfo.collider.GetComponent<SplineContainer>();
-        if (SplineGround == null)
-            haveSplinePointCached = false;
+        RaycastHit2D hit = Physics2D.Raycast(groundChecker.position, Vector2.down, groundCheckDistance, groundMask);
+        bool nowGrounded = hit.collider != null;
+        if (SplineGround && CanMagnet)
+        {
+            SplineGround.Evaluate(cachedSplinePoint, out float3 position, out float3 tangent, out float3 upVector3);
+            groundHitInfo.point = new Vector2(position.x, position.y);
+            groundHitInfo.normal = new Vector2(upVector3.x, upVector3.y);
+            nowGrounded = true;
+        } else
+        {
+            if (!CanMagnet)
+                SplineGround = null;
+            else if (nowGrounded)
+                SplineGround = hit.collider.GetComponent<SplineContainer>();
+            else
+                SplineGround = null;
+            if (SplineGround == null)
+                haveSplinePointCached = false;
+            groundHitInfo = hit;
+        }
             
-        if (nowGrounded && !Grounded)
+        if (nowGrounded && !wasGrounded)
         {
             onLand?.Invoke(this);
         } else if (!nowGrounded && Grounded)
