@@ -263,7 +263,7 @@ public class PlayerController : MonoBehaviour, PlayerControls.IInPlayActions
 
     void CheckFlip()
     {
-        int hSpeed = Utility.Sign(RB.velocity.x);
+        int hSpeed = Utility.Sign(RB.velocity.x, 0.01f);
         if (hSpeed == 1 && !facingRight)
         {
             Flip();
