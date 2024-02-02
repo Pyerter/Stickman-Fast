@@ -11,6 +11,8 @@ public class PlayerMotionController : MonoBehaviour
     protected PlayerController controller = null;
     public Rigidbody2D RB { get { return controller.RB; } }
     [SerializeField] protected Transform groundChecker;
+    [SerializeField] protected Transform bottom;
+    [SerializeField] protected Transform visualsTransform;
     #endregion
 
     #region Pause Cache
@@ -66,7 +68,7 @@ public class PlayerMotionController : MonoBehaviour
     #region Properties
     [Header("Properties")]
     protected bool _grounded;
-    public bool Grounded { get { return _grounded; } }
+    public bool Grounded { get { return _grounded || SplineGround != null; } }
     [SerializeField] protected bool breaking;
     public bool Breaking { get { return breaking; } }
     [SerializeField] protected float inputSpeed = 0f;
@@ -143,6 +145,21 @@ public class PlayerMotionController : MonoBehaviour
         AssertGrounded();
         UpdateHorizontalDirection();
         UpdateVerticalDirection();
+        UpdateVisualsRotation();
+    }
+
+    public void UpdateVisualsRotation()
+    {
+        if (!visualsTransform)
+            return;
+        if (Grounded)
+        {
+            Quaternion slopeRotation = Quaternion.FromToRotation(Vector2.up, groundHitInfo.normal);
+            visualsTransform.rotation = slopeRotation;
+        } else
+        {
+            visualsTransform.rotation = Quaternion.Euler(0, 0, 0);
+        }
     }
 
     public Vector2 TranslateVelocityToNormal(Vector2 velocity)
@@ -224,6 +241,8 @@ public class PlayerMotionController : MonoBehaviour
         float target_t = diff + t;
         if (target_t < 0 || target_t > 1)
         {
+            SplineGround = null;
+            haveSplinePointCached = false;
             UpdateHorizontalInWorld(prenormalVelocity);
             return;
         }
@@ -237,7 +256,7 @@ public class PlayerMotionController : MonoBehaviour
         prenormalVelocity.y = 0;
         RB.velocity = TranslateVelocityToNormal(prenormalVelocity);
         Vector3 pos = RB.transform.position;
-        Vector3 diffToPos = (Vector3)splinePos - groundChecker.transform.position;
+        Vector3 diffToPos = (Vector3)splinePos - bottom.transform.position;
         pos += diffToPos;
         pos.y += 0.01f;
         pos.z = 0;
